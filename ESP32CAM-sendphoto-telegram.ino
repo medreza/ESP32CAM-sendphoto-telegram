@@ -33,6 +33,7 @@ long measurement;
 
 
 void setup() {
+  pinMode(buzzerPin, OUTPUT);
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   Serial.println();
@@ -90,7 +91,7 @@ void setup() {
     s->set_brightness(s, 1);//up the blightness just a bit
     s->set_saturation(s, -2);//lower the saturation
   }
-  s->set_framesize(s, FRAMESIZE_SVGA);
+  s->set_framesize(s, FRAMESIZE_XGA);
   #if defined(CAMERA_MODEL_M5STACK_WIDE)
     s->set_vflip(s, 1);
     s->set_hmirror(s, 1);
@@ -136,10 +137,11 @@ void loop() {
     if (measurement > 50){
       Serial.println("!!! Vibration detected !!! Ringing alarm..");
       digitalWrite(buzzerPin, HIGH);
+      delay(2000);
       capturePhotoSaveSpiffs();
-      delay(3000);
+      delay(2000);
       readAndSendPhoto(SPIFFS, FILE_PHOTO, 0);
-      delay(3000);
+      delay(2000);
       digitalWrite(buzzerPin, LOW);
       Serial.println("Remaining bot message update: " + String(countBotMessageUpdate()));
       botLastUpdate = millis();

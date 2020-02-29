@@ -6,7 +6,7 @@
 #include <FS.h>
 
 
-// uncomment to select camera model
+// Uncomment one that match your device camera model
 //#define CAMERA_MODEL_WROVER_KIT
 //#define CAMERA_MODEL_ESP_EYE
 //#define CAMERA_MODEL_M5STACK_PSRAM
@@ -16,18 +16,17 @@
 #include "camera_pins.h"
 
 
-const char* ssid = "<your ssid>"; // WiFi SSID name
+const char* ssid = "<your wifi>"; // WiFi SSID name
 const char* password = "<your password>"; // WiFi password
-
 #define BOTtoken "<your bot token>"  // Telegram bot token (Get it from the BotFather)
-#define FILE_PHOTO "/photo.jpg"
+#define FILE_PHOTO "/photo.jpg" // define photo file name
 
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOTtoken, client);
-
 long botLastUpdate = 0; 
 long botUpdateCheckInterval = 10000; // bot check update interval in miliseconds
 int sensorPin = 2; // vibration sensor pin
+int buzzerPin = 4; // buzzer pin
 bool standbyOn = false;
 File file;
 long measurement;
@@ -66,7 +65,7 @@ void setup() {
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  //init with high specs to pre-allocate larger buffers
+  //Init with high specs to pre-allocate larger buffers
   if(psramFound()){
     config.frame_size = FRAMESIZE_UXGA;
     config.jpeg_quality = 10;
@@ -80,20 +79,17 @@ void setup() {
     pinMode(13, INPUT_PULLUP);
     pinMode(14, INPUT_PULLUP);
   #endif
-  // camera module init
-  esp_err_t err = esp_camera_init(&config);
+  esp_err_t err = esp_camera_init(&config); // camera module init
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
   sensor_t * s = esp_camera_sensor_get();
-  //initial sensors are flipped vertically and colors are a bit saturated
   if (s->id.PID == OV3660_PID) {
     s->set_vflip(s, 1);//flip it back
     s->set_brightness(s, 1);//up the blightness just a bit
     s->set_saturation(s, -2);//lower the saturation
   }
-  //drop down frame size for higher initial frame rate
   s->set_framesize(s, FRAMESIZE_SVGA);
   #if defined(CAMERA_MODEL_M5STACK_WIDE)
     s->set_vflip(s, 1);
@@ -113,7 +109,7 @@ void setup() {
 
 
 void loop() {
-    // check bot message update every interval
+    // Check bot message update every interval
     if (millis() > botLastUpdate + botUpdateCheckInterval)  {
       Serial.println("Checking bot message update...");
       if (countBotMessageUpdate() >= 1) {
@@ -139,12 +135,12 @@ void loop() {
     Serial.println("Sensor value: " + String(measurement));
     if (measurement > 50){
       Serial.println("!!! Vibration detected !!! Ringing alarm..");
-      digitalWrite(4, HIGH);
+      digitalWrite(buzzerPin, HIGH);
       capturePhotoSaveSpiffs();
       delay(3000);
-      readAndSendPhoto(SPIFFS, "/photo.jpg", 0);
+      readAndSendPhoto(SPIFFS, FILE_PHOTO, 0);
       delay(3000);
-      digitalWrite(4, LOW);
+      digitalWrite(buzzerPin, LOW);
       Serial.println("Remaining bot message update: " + String(countBotMessageUpdate()));
       botLastUpdate = millis();
     }
@@ -158,7 +154,7 @@ int countBotMessageUpdate() {
 }
 
 
-// check if photo capture was successful
+// Check if photo capture was successful
 bool checkPhoto( fs::FS &fs ) {
   File f_pic = fs.open( FILE_PHOTO );
   unsigned int pic_sz = f_pic.size();
@@ -166,19 +162,19 @@ bool checkPhoto( fs::FS &fs ) {
 }
 
 
-// capture photo and save it to SPIFFS
+// Capture photo and save it to SPIFFS
 void capturePhotoSaveSpiffs( void ) {
   camera_fb_t * fb = NULL; 
   bool ok = 0; // flag indicating if the picture has been taken correctly
   do {
-    // take a photo with the camera
+    // take a photo with the camera module
     Serial.println("Taking photo...");
     fb = esp_camera_fb_get();
     if (!fb) {
       Serial.println("Camera capture failed");
       return;
     }
-    // create photo file
+    // create photo file in SPIFFS
     Serial.printf("Picture file name: %s\n", FILE_PHOTO);
     file = SPIFFS.open(FILE_PHOTO, FILE_WRITE);
     // write captured photo to file
@@ -202,43 +198,45 @@ void capturePhotoSaveSpiffs( void ) {
 }
 
 
-// read saved photo file in SPIFFS and send it to the Telegram bot
+// Read saved photo file in SPIFFS and send it to the Telegram bot
 void readAndSendPhoto(fs::FS &fs, const char * path, int i){
-   Serial.printf("Reading and sending file: %s\r\n", path);
-   file = fs.open(path);
+    Serial.printf("Reading and sending file: %s\r\n", path);
+    file = fs.open(path);
     if(!file || file.isDirectory()){
-        Serial.println("- failed to open file for reading");
-        return;
+          Serial.println("- failed to open file for reading");
+          return;
     }
-   // send photo file to Telegram
-     String sent = bot.sendPhotoByBinary(bot.messages[i].chat_id, "image/jpeg", file.size(),
+    String sent = bot.sendPhotoByBinary(bot.messages[i].chat_id, "image/jpeg", file.size(),
             isMoreDataAvailable,
-            getNextByte);
-        if (sent) {
-          Serial.println("Photo was successfully sent");
-        } else {
-          Serial.println("Failed to send photo :(");
-        }
+            getNextByte); // send photo file to Telegram
+    if (sent) {
+      Serial.println("Photo was successfully sent");
+    } else {
+      Serial.println("Failed to send photo :(");
+    }
     file.close();
 }
 
 
+// Check if there are any bytes available for reading from the file
 bool isMoreDataAvailable(){
   return file.available();
 }
 
 
+// Read file next byte
 byte getNextByte(){
   return file.read();
 }
 
 
+// Get vibration sensor value
 long vibration(){
-  long measurement=pulseIn(sensorPin, HIGH);  //wait for the pin to get HIGH and returns measurement
-  return measurement;
+  return pulseIn(sensorPin, HIGH); // wait for the pin to get HIGH signal
 }
 
 
+// Receive status command and send back responses
 void checkStandbyStatus() {
     if (bot.messages[0].text == "status" || bot.messages[0].text == "Status") {
       if (standbyOn){

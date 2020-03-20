@@ -5,7 +5,7 @@ The code itself is a modification from [Randomnerdtutorial blog](https://randomn
 
 ## Installation
 #### Telegram Bot
-- Create a Telegram Bot by having a chit-chat with the [`@BotFather`](t.me/BotFather)
+- Create a Telegram Bot by having a chit-chat with the [`@BotFather`](https://t.me/BotFather)
 - Get API token of the Telegram bot
 - Paste it in `#define BOTtoken "<your bot API token here>"`
 #### Arduino libraries
